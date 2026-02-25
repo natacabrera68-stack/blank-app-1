@@ -3,71 +3,54 @@ import numpy as np
 from PIL import Image
 import easyocr
 
-st.set_page_config(page_title="Scanner Pro", layout="wide")
+st.set_page_config(page_title="Mi Lista", page_icon="👍")
 
+# Estilo para que los renglones sean claros y el botón esté pegado al texto
 st.markdown("""
     <style>
-    .container { position: relative; display: inline-block; }
-    .overlay-btn {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        z-index: 10;
-        cursor: pointer;
-        width: 30px;
-        height: 30px;
-        accent-color: #00ff00;
+    .stCheckbox { 
+        margin-bottom: 0px;
+        padding: 5px;
     }
-    .item-label {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.8);
-        padding: 2px 5px;
-        border-radius: 3px;
-        font-size: 12px;
-        pointer-events: none;
+    .item-text {
+        font-size: 18px;
+        font-weight: bold;
+        padding-top: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📸 Scanner Interactivo")
-st.write("Marcá los ítems directamente sobre tu foto.")
+st.title("📸 Scanner de Compras")
 
-archivo = st.file_uploader("Subí la foto de tu lista", type=["jpg", "png", "jpeg"])
+archivo = st.file_uploader("Subí o sacá foto a la lista", type=["jpg", "png", "jpeg"])
 
 if archivo:
     img = Image.open(archivo)
-    ancho_orig, alto_orig = img.size
+    # Foto arriba para referencia rápida
+    st.image(img, use_container_width=True)
     
-    # Mostramos la imagen ocupando el ancho disponible
-    ancho_display = 800 
-    escala = ancho_display / ancho_orig
-    alto_display = alto_orig * escala
-
-    if 'resultados' not in st.session_state:
-        with st.spinner('Escaneando posiciones...'):
+    if st.button("🔍 IDENTIFICAR ITEMS"):
+        with st.spinner('Escaneando...'):
             reader = easyocr.Reader(['es'])
-            st.session_state['resultados'] = reader.readtext(np.array(img))
+            # Filtramos textos cortos o vacíos para que la lista quede limpia
+            resultados = reader.readtext(np.array(img), detail=0)
+            st.session_state['lista'] = [res for res in resultados if len(res) > 1]
 
-    # Contenedor para la imagen y los botones
-    html_botones = ""
-    for i, (bbox, texto, prob) in enumerate(st.session_state['resultados']):
-        # Calculamos el centro del texto detectado
-        centro_x = (bbox[0][0] + bbox[2][0]) / 2 * escala
-        centro_y = (bbox[0][1] + bbox[2][1]) / 2 * escala
+    if 'lista' in st.session_state:
+        st.write("---")
+        for i, item in enumerate(st.session_state['lista']):
+            # Creamos dos columnas: una para el Like y otra para el Nombre
+            col1, col2 = st.columns([0.2, 0.8])
+            
+            with col1:
+                tacho = st.checkbox("👍", key=f"check_{i}")
+            
+            with col2:
+                if tacho:
+                    st.markdown(f"<div class='item-text'><del>{item}</del> ✅</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='item-text'>{item}</div>", unsafe_allow_html=True)
         
-        # Creamos un checkbox HTML para cada posición
-        html_botones += f'''
-            <input type="checkbox" class="overlay-btn" 
-                   style="left: {centro_x}px; top: {centro_y}px;">
-        '''
-
-    # Renderizamos la imagen con los botones encima
-    st.markdown(
-        f'''
-        <div class="container" style="width: {ancho_display}px; height: {alto_display}px;">
-            <img src="data:image/jpeg;base64,{st.image(img, output_format="JPEG", width=ancho_display)}" 
-                 style="width: 100%; position: absolute; top: 0; left: 0;">
-            {html_botones}
-        </div>
-        ''', 
-        unsafe_allow_html=True
-    )
+        if st.button("Limpiar todo"):
+            del st.session_state['lista']
+            st.rerun()
